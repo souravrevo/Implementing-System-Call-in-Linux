@@ -1,0 +1,138 @@
+                  "Operating System Assignment 1"
+
+Author : Kumar Sourav
+
+Description:
+
+ Firstly, the minimal kernel was prepared by setting various unnecessary options off and iteratively testing the configuration for correctness. In the
+ assignment there is a user module and a kernel module. User module takes
+ parameters from the user, performs basic validation on the in puts taken from
+ the user and wraps it in a void pointer which is passed to the  kernel module.  Kernel module takes the void pointer parameters, performs basic  checks on the  authenticity of the parameters and unwraps the parameters. Kernel module 
+ performs read/write operation based on the value of flags.
+
+ Note: For value of -m -ARG like 777 we need to specify umask 0.
+
+List of files used:
+
+ 1. xhw1.c:
+
+ This is the user module. It takes command line arguments from the user validate s them and wraps them inside a void pointer. This void pointer is then passed   to the kernel module.
+
+ 2. sys_xconcat.c:
+
+ This is the kernel module. It receives the parameters from the xhw1.c module    , validates the void pointer for correct memory address, length and content and then calls appropriate read/write functions according to the value of flags and number of input files given.
+
+ 3. install_module.sh:
+
+ This is the script file which performs operations like rmmod , insmod , make in one go.
+
+ 4. Makefile:
+
+ This gives directions on how to compile user and kernel modules, it also descri bes about what to do for cleanup.
+
+  
+Approach:
+
+ In this section approach is described in terms of incrementals steps.
+
+ Steps:
+
+ 1. Following are the various modes which can be handled by the program:
+    
+    a. -a (Append): This mode gets activated when user specifies -a on 
+       the command line. If the output file exists then it will append data to
+       it otherwise it will give an error.
+    b. -t (Truncate): This mode gets activated when user specified -t on 
+       the command line. If the output file exists it will truncate the existing       data and write new data else it will give an error.
+    c. -c (create): This mode gets activate when user specifies -c on the
+       command line. If the output file exists then it will overwrite the 
+       existing data else it will create a new file and write data into it.
+    d. -e (Excl): This mode gets activated when user specifies -e on 
+       the command line. It is used wih -c option to creat otherwise it has no
+       individual contribution.
+    e. Combinations of -a,-t,-c and -e like -ace,-at are also supported.
+  
+ 2. Taken user input from command line and put it subject to validations like :
+    * args must be >= 2
+    * mode must be valid (0-777)
+    * can only select one at a time from (-N,-P) 
+    * cannot select (-ANP)
+    * checked various combinations of oflags like (-ce,-at,-ace,-ate) and carrie      d out relevent validation.
+
+ 3. Once all the validation is done in xhw1.c, all the parameters are packed in     a void pointer *param and placed in the syscall argument along with the
+    length of the void pointer which is calculated by sizeof(arg) function.
+
+ 4. sys_xconcat.c receives the parameters from xhw1.c and following validations     are performed on it:
+    * if(arg == NULL) return error
+    * if(sizeof(arg)!=len) return error
+    * access_ok(arg), it should point to valid space in memory
+    * copy_from_user(...), copy blocks of data from user space if all blocks are      valid else throw error.
+    * getnames(), to copy output and input file pointers to point from user 
+      space to kernel space.
+
+ 5. If all the validations are successful then call checkFiles(infiles) to check    if every infile exists and is valid else return an error. Also if input and
+    output files are same the program will return an error.
+
+ 6. After checking input files call read_write_operation(...), this function        performs all read/write operations based on flags passed from user. Eg:
+    *if(flags==0x00) return no of bytes written
+    *if(flags==0x01) return no of files written
+    *if(flags==0x02) return percentage of total data written out
+    *if(flags==0x04) run atomic mode.
+
+ 7. Checks have been placed to look for partial read/write and return 
+    appropriate errors/messages on read/write errors.
+
+ 8. Finally, garbage collection is done by closing all files, freeing all 
+    pointers used.
+ 
+
+Atomic Mode (EC):
+
+ For Atmoic mode i have encapsulated code in #ifdef EXTRA_CREDIT blocks. In Make file KCCPFLAGS=-DEXTRA_CREDIT has been included in compilation string for 
+ sys_xc oncat, this makes extra credit code to be included inline in the code. 
+ To disable extra credit code KCCPFLAGS=-DEXTRA_CREDIT needs to be removed from  the Makefile.Inside every ifdef EXTRA_CREDIT value of flags is checked and if
+ value of flags is  0x04,0x05 or 0x06 then atmoic mode code  is executed else
+ normal code is executed.
+
+ Atomic mode supports complete transactions only, which means partial read,write are treated as errors while there can be partial read/writes in normal concatin ation mode. To accomplish this task i have performed basic checks for atomic 
+ mode. Following are some of the atomic mode scenarios which i have handled:
+
+  1. If outfile don't exist and an error occurs then partially written outfile 
+     is deleted.
+  2. If outfile exists then take its backup in tempfile here two things can 
+     happen:
+     a. Error occurs in read/write: In this case rename the tempfile to outfile 	and delete the outfile.
+     b. No Error occurs: In this case delete the created tempfile and leave the         outfile untouched.
+ 
+ Atomic mode has following flags support:
+  1. A: returns num of bytes written (0x04)
+  2. AN: returns num of files written (0x05)
+  3. AP: returns percentage of butes written (0x06)
+  4. ANP: returns error as A,N,P cannot be together. (0x07)
+
+Basic Usage Instructions:
+
+ Syntax : ./xhw1 [flags] oufile infile1 infile2 infile3.....infile(k)
+
+ Here [flags] can take following values:
+  
+  -a : append data to an existing file
+  -c : Create a file and write if file dono't exist
+  -t : Write file in truncate mode
+  -e : Complimentary with c.
+  -A : activate atomic mode
+  -N : return no of files written
+  -P : return percentage of data written
+  -m ARG : permissions for output file (Default mode taken 550)
+  -h : Display program usage instructions on console
+
+
+Files included in submission:
+
+ 1. xhw1.c: User module
+ 2. sys_xconcat.c: kernel module
+ 3. Makefile
+ 4. README
+ 5. install_module.sh
+ 6. kernel.config
+ 
